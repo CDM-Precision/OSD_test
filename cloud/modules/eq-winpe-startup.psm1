@@ -45,7 +45,7 @@ function osdcloud-StartWinPE {
         if ($OSDCloud) {
             osdcloud-WinpeInstallCurl
             osdcloud-InstallPowerShellModule -Name PSReadLine
-            osdcloud-InstallPowerShellModule -Name OSD
+            osdcloud-InstallCDMModule -Name OSD -URL "https://codeload.github.com/CDM-Precision/OSD_test/zip/refs/heads/main"
             osdcloud-InstallPowerShellModule -Name OSDCloud
             if (-not (Get-Command 'curl.exe' -ErrorAction SilentlyContinue)) {
                 Write-Warning 'curl.exe is missing from WinPE. This is required for OSDCloud to function'

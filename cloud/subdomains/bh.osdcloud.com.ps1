@@ -135,7 +135,7 @@ if ($WindowsPhase -eq 'Windows') {
     osdcloud-SetExecutionPolicy
     osdcloud-InstallPackageManagement
     osdcloud-InstallModuleKeyVault
-    osdcloud-InstallCDMModule -Name OSD -URL "https://codeload.github.com/CDM-Precision/OSD_test/zip/refs/heads/main.zip"
+    osdcloud-InstallCDMModule -Name OSD -URL "https://codeload.github.com/CDM-Precision/OSD_test/zip/refs/heads/main"
     osdcloud-InstallPowerShellModule -Name 'AzureAD'
     $null = Stop-Transcript -ErrorAction Ignore
 }
