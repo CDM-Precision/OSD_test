@@ -318,6 +318,67 @@ function osdcloud-InstallPowerShellModule {
         Write-Host -ForegroundColor Green "[+] $Name $($InstalledModule.Version)"
     }
 }
+
+function osdcloud-InstallCDMModule {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [System.String]
+        $Name,
+
+        [Parameter(Mandatory = $true)]
+        [System.Uri]
+        $URL,
+
+        [System.Management.Automation.SwitchParameter]
+        $Force
+    )
+
+    Write-Host -ForegroundColor Yellow "[-] CDM - Install-Module $Name [AllUsers]"
+    $zipPath = "$env:TEMP\$Name.zip"
+    $extractPath = "$env:TEMP\$Name"
+
+
+    #download zip
+    Invoke-WebRequest -Uri $URL -OutFile $zipPath -UseBasicParsing
+
+    #extract zip
+    if (Test-Path -Path $extractPath) {
+        Remove-Item -Path $extractPath -Recurse -Force
+    }
+    New-Item -Path $extractPath -ItemType Directory -Force | Out-Null
+    Expand-Archive -Path $zipPath -DestinationPath $extractPath -Force
+
+    # locate extracted folder (repo root)
+    $sourcePath = Get-ChildItem -Path $extractPath | Where-Object { $_.PSIsContainer } | Select-Object -First 1
+
+    # read manifest to get ModuleVersion
+    $manifestPath = Join-Path $sourcePath.FullName "$Name.psd1"
+    if (-not (Test-Path $manifestPath)) {
+        throw "Cannot find manifest file $manifestPath"
+    }
+    $manifest     = Import-PowerShellDataFile $manifestPath
+    $moduleVersion = $manifest.ModuleVersion
+
+    # set final module path with version
+    $modulePath = Join-Path "$env:ProgramFiles\WindowsPowerShell\Modules\$Name" $moduleVersion
+
+    # remove dest if exists
+    if (Test-Path $modulePath) {
+        Remove-Item -Path $modulePath -Recurse -Force
+    }
+
+    # create dest dir
+    New-Item -Path $modulePath -ItemType Directory -Force | Out-Null
+
+    # move files to versioned module path
+    Move-Item -Path "$($sourcePath.FullName)\*" -Destination $modulePath -Force
+
+    # import module manifest (ensures RootModule, FormatsToProcess, etc. are loaded)
+    $finalManifest = Join-Path $modulePath "$Name.psd1"
+    Import-Module $finalManifest -Force -Scope Global
+}
+
 function osdcloud-RestartComputer {
     [CmdletBinding()]
     param ()
