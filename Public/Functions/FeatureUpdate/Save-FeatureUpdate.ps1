@@ -157,7 +157,7 @@ function Save-FeatureUpdate {
             Get-Item "$DownloadPath\$($GetFeatureUpdate.FileName)"
         }
         elseif (Test-WebConnection -Uri "$($GetFeatureUpdate.Url)") {
-            $SaveWebFile = Save-WebFile -SourceUrl $GetFeatureUpdate.Url -DestinationDirectory "$DownloadPath" -DestinationName $GetFeatureUpdate.FileName
+            $SaveWebFile = Save-WebFile -SourceUrl $GetFeatureUpdate.Url -DestinationDirectory "$DownloadPath" -DestinationName $GetFeatureUpdate.FileName -ExpectedSHA1 $GetFeatureUpdate.SHA1
 
             if (Test-Path $SaveWebFile.FullName) {
                 Get-Item $SaveWebFile.FullName

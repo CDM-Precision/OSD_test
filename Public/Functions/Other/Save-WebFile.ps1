@@ -31,7 +31,15 @@ function Save-WebFile {
         $Overwrite,
 
         [System.Management.Automation.SwitchParameter]
-        $WebClient
+        $WebClient,
+
+        #Expected SHA1 hash for verification
+        [System.String]
+        $ExpectedSHA1,
+
+        #Maximum number of download attempts
+        [System.Int32]
+        $MaxRetries = 3
     )
     #=================================================
     #	Values
@@ -88,7 +96,7 @@ function Save-WebFile {
     }
     else {
         #=================================================
-        #	Download
+        #	Download with retries
         #=================================================
         $SourceUrl = [Uri]::EscapeUriString($SourceUrl.Replace('%', '~')).Replace('~', '%') # Substitute and replace '%' to avoid escaping os Azure SAS tokens
         Write-Verbose "Testing file at $SourceUrl"
@@ -106,59 +114,40 @@ function Save-WebFile {
             $UseWebClient = $true
         }
 
-        if ($UseWebClient -eq $true) {
-            [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls1
-            $WebClient = New-Object System.Net.WebClient
-            $WebClient.DownloadFile($SourceUrl, $DestinationFullName)
-            $WebClient.Dispose()
-        }
-        else {
-            Write-Verbose "cURL Source: $SourceUrl"
-            Write-Verbose "Destination: $DestinationFullName"
-
+        # Get expected size and hash info
+        $remoteLength = $null
+        $remoteAcceptsRanges = $false
+        if ($UseWebClient -eq $false) {
             Write-Verbose 'Requesing HTTP HEAD to get Content-Length and Accept-Ranges header'
             try {
                 $remote = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $SourceUrl
+                $remoteLength = [Int64]($remote.Headers.'Content-Length' | Select-Object -First 1)
+                $remoteAcceptsRanges = ($remote.Headers.'Accept-Ranges' | Select-Object -First 1) -eq 'bytes'
             }
             catch {
                 Write-Warning "$_" # Error Example: Response status code does not indicate success: 404 (Not Found).
                 Return $null
             }
-            $remoteLength = [Int64]($remote.Headers.'Content-Length' | Select-Object -First 1)
-            $remoteAcceptsRanges = ($remote.Headers.'Accept-Ranges' | Select-Object -First 1) -eq 'bytes'
+        }
 
-            $curlCommandExpression = "& curl.exe --insecure --location --output `"$DestinationFullName`" --url `"$SourceUrl`""
-    
-            if ($host.name -match 'PowerShell ISE Host') {
-                #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
-                $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
+        $DownloadAttempt = 0
+        $DownloadSuccess = $false
+        while ($DownloadAttempt -lt $MaxRetries -and -not $DownloadSuccess) {
+            $DownloadAttempt++
+            Write-Verbose "Download attempt $DownloadAttempt of $MaxRetries"
+
+            if ($UseWebClient -eq $true) {
+                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls1
+                $WebClient = New-Object System.Net.WebClient
+                $WebClient.DownloadFile($SourceUrl, $DestinationFullName)
+                $WebClient.Dispose()
             }
             else {
-                Invoke-Expression $curlCommandExpression
-            }
+                Write-Verbose "cURL Source: $SourceUrl"
+                Write-Verbose "Destination: $DestinationFullName"
 
-            #=================================================
-            #	Continue interrupted download
-            #=================================================
-            if (Test-Path $DestinationFullName) {
-                $localExists = $true
-            }
-
-            $RetryDelaySeconds = 1
-            $MaxRetryCount = 10
-            $RetryCount = 0
-            while (
-                $localExists `
-                    -and ((Get-Item $DestinationFullName).Length -lt $remoteLength) `
-                    -and $remoteAcceptsRanges `
-                    -and ($RetryCount -lt $MaxRetryCount)
-            ) {
-                Write-Verbose "Download is incomplete, remote server accepts ranges, will retry in $RetryDelaySeconds second(s)"
-                Start-Sleep -Seconds $RetryDelaySeconds
-                $RetryDelaySeconds *= 2 # retry with exponential backoff
-                $RetryCount += 1
-                $curlCommandExpression = "& curl.exe --insecure --location --continue-at - --output `"$DestinationFullName`" --url `"$SourceUrl`""
-                
+                $curlCommandExpression = "& curl.exe --insecure --location --output `"$DestinationFullName`" --url `"$SourceUrl`""
+    
                 if ($host.name -match 'PowerShell ISE Host') {
                     #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
                     $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
@@ -166,13 +155,86 @@ function Save-WebFile {
                 else {
                     Invoke-Expression $curlCommandExpression
                 }
+
+                #=================================================
+                #	Continue interrupted download
+                #=================================================
+                if (Test-Path $DestinationFullName) {
+                    $localExists = $true
+                }
+
+                $RetryDelaySeconds = 1
+                $MaxRetryCount = 10
+                $RetryCount = 0
+                while (
+                    $localExists `
+                        -and ((Get-Item $DestinationFullName).Length -lt $remoteLength) `
+                        -and $remoteAcceptsRanges `
+                        -and ($RetryCount -lt $MaxRetryCount)
+                ) {
+                    Write-Verbose "Download is incomplete, remote server accepts ranges, will retry in $RetryDelaySeconds second(s)"
+                    Start-Sleep -Seconds $RetryDelaySeconds
+                    $RetryDelaySeconds *= 2 # retry with exponential backoff
+                    $RetryCount += 1
+                    $curlCommandExpression = "& curl.exe --insecure --location --continue-at - --output `"$DestinationFullName`" --url `"$SourceUrl`""
+                    
+                    if ($host.name -match 'PowerShell ISE Host') {
+                        #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
+                        $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
+                    }
+                    else {
+                        Invoke-Expression $curlCommandExpression
+                    }
+                }
             }
 
-            if ($localExists -and ((Get-Item $DestinationFullName).Length -lt $remoteLength)) {
-                Write-Verbose "Download is incomplete after $RetryCount retries."
-                Write-Warning "Could not download $DestinationFullName"
-                $null
+            #=================================================
+            #	Verify download
+            #=================================================
+            if (Test-Path $DestinationFullName) {
+                $localFile = Get-Item $DestinationFullName
+                $sizeMatch = $true
+                if ($remoteLength) {
+                    $sizeMatch = $localFile.Length -eq $remoteLength
+                    if (-not $sizeMatch) {
+                        Write-Warning "Downloaded file size ($($localFile.Length)) does not match expected size ($remoteLength)"
+                    }
+                }
+
+                $hashMatch = $true
+                if ($ExpectedSHA1) {
+                    try {
+                        $actualSHA1 = (Get-FileHash -Path $DestinationFullName -Algorithm SHA1).Hash
+                        $hashMatch = $actualSHA1 -eq $ExpectedSHA1
+                        if (-not $hashMatch) {
+                            Write-Warning "Downloaded file SHA1 ($actualSHA1) does not match expected SHA1 ($ExpectedSHA1)"
+                        }
+                    }
+                    catch {
+                        Write-Warning "Failed to compute SHA1 hash: $_"
+                        $hashMatch = $false
+                    }
+                }
+
+                if ($sizeMatch -and $hashMatch) {
+                    $DownloadSuccess = $true
+                }
+                else {
+                    if ($DownloadAttempt -lt $MaxRetries) {
+                        Write-Verbose "Download verification failed, will retry"
+                        Remove-Item $DestinationFullName -Force -ErrorAction SilentlyContinue
+                        Start-Sleep -Seconds 2
+                    }
+                }
             }
+            else {
+                Write-Warning "Download failed, file not found"
+            }
+        }
+
+        if (-not $DownloadSuccess) {
+            Write-Warning "Could not download $DestinationFullName after $MaxRetries attempts"
+            $null
         }
         #=================================================
         #	Return
