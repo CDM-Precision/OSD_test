@@ -14,7 +14,7 @@ function Connect-OSDCloudAzure {
             New-Item $OSDCloudLogs -ItemType Directory -Force | Out-Null
         }
     }
-    Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+    Invoke-Expression -Command (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/functions.ps1')
     osdcloud-InstallPowerShellModule -Name 'AzureAD'
     osdcloud-InstallPowerShellModule -Name 'Az.Accounts'
     osdcloud-InstallPowerShellModule -Name 'Az.KeyVault'

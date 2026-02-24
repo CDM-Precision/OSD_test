@@ -6,7 +6,7 @@ function Set-SetupCompleteNetFX {
 
     if (Test-Path -Path $PSFilePath){
         Add-Content -Path $PSFilePath "Write-Output 'Running Enable NetFX Function'"
-        Add-Content -Path $PSFilePath "if (Test-WebConnection -Uri google.com){Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/_oobe.psm1'); osdcloud-NetFX} else {Write-Host 'No Internet Connection Detected'}"
+        Add-Content -Path $PSFilePath "if (Test-WebConnection -Uri google.com){Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/modules/_oobe.psm1'); osdcloud-NetFX} else {Write-Host 'No Internet Connection Detected'}"
     }
     else {
     Write-Output "$PSFilePath - Not Found"

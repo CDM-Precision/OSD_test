@@ -24,7 +24,7 @@
     Add-Content -Path $SetupCompletePs '$StartTime = Get-Date; Write-Host "Start Time: $($StartTime.ToString("hh:mm:ss"))"'
     Add-Content -Path $SetupCompletePs '$ModulePath = (Get-ChildItem -Path "$($Env:ProgramFiles)\WindowsPowerShell\Modules\osd" | Where-Object {$_.Attributes -match "Directory"} | select -Last 1).fullname'
     Add-Content -Path $SetupCompletePs 'import-module "$ModulePath\OSD.psd1" -Force'
-    Add-Content -Path $SetupCompletePs "Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/_anywhere.psm1')"
+    Add-Content -Path $SetupCompletePs "Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/modules/_anywhere.psm1')"
     # Add-Content -Path $SetupCompletePs "Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/_winpe.psm1')"
     Add-Content -Path $SetupCompletePs "Start-Sleep -Seconds 10"
     Add-Content -Path $SetupCompletePs "Start-Transcript -Path 'C:\Windows\Temp\osdcloud-logs\SetupComplete.log' -ErrorAction Ignore"

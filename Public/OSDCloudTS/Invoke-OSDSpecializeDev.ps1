@@ -257,7 +257,7 @@ function Invoke-OSDSpecializeDev {
             write-host "Specialize Stage - Dell Enterprise Devices" -ForegroundColor Green
             $WarningPreference = "SilentlyContinue"
             #Invoke-Expression (Invoke-RestMethod -Uri 'functions.osdcloud.com')
-            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/devicesdell.psm1')
+            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/modules/devicesdell.psm1')
             if ($DellJSON.Updates.DCUInstall -eq $true){
                 Write-Host -ForegroundColor DarkGray "========================================================================="
                 Write-Host "Installing Dell Command Update" -ForegroundColor Cyan

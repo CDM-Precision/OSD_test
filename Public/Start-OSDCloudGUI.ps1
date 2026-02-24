@@ -42,7 +42,7 @@
     if ($Hotfix) {
         $global:OSDCloudHotfix = $true
 
-        $HotfixUrl = 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/hotfix/osdcloudgui.ps1'
+        $HotfixUrl = 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/hotfix/osdcloudgui.ps1'
 
         $Result = Invoke-WebRequest -Uri $HotfixUrl -UseBasicParsing -Method Head
         if ($Result.StatusCode -eq 200) {

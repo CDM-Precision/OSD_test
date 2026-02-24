@@ -110,7 +110,7 @@ function Start-OSDCloudREAzure {
     
     if ($env:SystemDrive -ne 'X:') {
         if (([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] 'Administrator')) {
-            Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+            Invoke-Expression -Command (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/functions.ps1')
 
             Connect-OSDCloudAzure
             Get-OSDCloudREAzureResources

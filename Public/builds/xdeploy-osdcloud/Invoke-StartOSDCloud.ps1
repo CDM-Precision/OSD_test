@@ -2295,8 +2295,8 @@ exit
     if ($WebConnection -eq $True){
         if ($global:OSDCloud.DebugMode -eq $true){
             Write-SectionHeader "DebugMode Enabled"
-            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/_anywhere.psm1')
-            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/OSDeploy/OSD/master/cloud/modules/debugmode.psm1')
+            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/modules/_anywhere.psm1')
+            Invoke-Expression (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/modules/debugmode.psm1')
             osdcloud-addcmtrace
             osdcloud-addmouseoobe
             #sdcloud-UpdateModuleFilesManually

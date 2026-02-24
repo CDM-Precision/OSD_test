@@ -55,7 +55,7 @@ function osdcloud-StartWinPE {
         }
         if ($Azure) {
             $KeyVault = $false
-            Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+            Invoke-Expression -Command (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/functions.ps1')
             osdcloud-InstallPowerShellModule -Name 'AzureAD'
             osdcloud-InstallPowerShellModule -Name 'Az.Accounts'
             osdcloud-InstallPowerShellModule -Name 'Az.KeyVault'
@@ -65,7 +65,7 @@ function osdcloud-StartWinPE {
             osdcloud-InstallPowerShellModule -Name 'Microsoft.Graph.DeviceManagement'
         }
         if ($KeyVault) {
-            Invoke-Expression -Command (Invoke-RestMethod -Uri functions.osdcloud.com)
+            Invoke-Expression -Command (Invoke-RestMethod -Uri 'https://raw.githubusercontent.com/CDM-Precision/OSD_test/refs/heads/main/cloud/functions.ps1')
             osdcloud-InstallPowerShellModule -Name 'Az.Accounts'
             osdcloud-InstallPowerShellModule -Name 'Az.KeyVault'
         }
