@@ -1,11 +1,3 @@
-<#
-.SYNOPSIS
-Downloads a file from the internet and returns a Get-Item Object
-.DESCRIPTION
-Downloads a file from the internet and returns a Get-Item Object
-.LINK
-https://github.com/OSDeploy/OSD/tree/master/Docs
-#>
 function Save-WebFile {
     [CmdletBinding()]
     [OutputType([System.IO.FileInfo])]
@@ -13,239 +5,226 @@ function Save-WebFile {
     (
         [Parameter(Position = 0, Mandatory, ValueFromPipelineByPropertyName)]
         [Alias('FileUri')]
-        [System.String]
-        $SourceUrl,
+        [System.String]$SourceUrl,
 
         [Parameter(ValueFromPipelineByPropertyName)]
         [Alias('FileName')]
-        [System.String]
-        $DestinationName,
+        [System.String]$DestinationName,
 
         [Alias('Path')]
-        [System.String]
-        $DestinationDirectory = (Join-Path $env:TEMP 'OSD'),
+        [System.String]$DestinationDirectory = (Join-Path $env:TEMP 'OSD'),
 
-        #Overwrite the file if it exists already
-        #The default action is to skip the download
-        [System.Management.Automation.SwitchParameter]
-        $Overwrite,
-
-        [System.Management.Automation.SwitchParameter]
-        $WebClient,
-
-        #Expected SHA1 hash for verification
-        [System.String]
-        $ExpectedSHA1,
-
-        #Maximum number of download attempts
-        [System.Int32]
-        $MaxRetries = 3
+        [System.Management.Automation.SwitchParameter]$Overwrite,
+        [System.Management.Automation.SwitchParameter]$WebClient,
+        [System.String]$ExpectedSHA1,
+        [System.Int32]$MaxRetries = 3
     )
-    #=================================================
-    #	Values
-    #=================================================
+
+    Write-Verbose "========== Save-WebFile START =========="
     Write-Verbose "SourceUrl: $SourceUrl"
-    Write-Verbose "DestinationName: $DestinationName"
+    Write-Verbose "DestinationName (initial): $DestinationName"
     Write-Verbose "DestinationDirectory: $DestinationDirectory"
     Write-Verbose "Overwrite: $Overwrite"
-    Write-Verbose "WebClient: $WebClient"
-    #=================================================
-    #	DestinationDirectory
-    #=================================================
-    if (Test-Path "$DestinationDirectory") {
-        Write-Verbose "Directory already exists at $DestinationDirectory"
-    }
-    else {
-        New-Item -Path "$DestinationDirectory" -ItemType Directory -Force -ErrorAction Stop | Out-Null
-    }
-    #=================================================
-    #	Test File
-    #=================================================
-    $DestinationNewItem = New-Item -Path (Join-Path $DestinationDirectory "$(Get-Random).txt") -ItemType File
+    Write-Verbose "WebClient switch: $WebClient"
+    Write-Verbose "ExpectedSHA1: $ExpectedSHA1"
+    Write-Verbose "MaxRetries: $MaxRetries"
 
-    if (Test-Path $DestinationNewItem.FullName) {
-        $DestinationDirectory = $DestinationNewItem | Select-Object -ExpandProperty Directory
-        Write-Verbose "Destination Directory is writable at $DestinationDirectory"
-        Remove-Item -Path $DestinationNewItem.FullName -Force | Out-Null
+    # Ensure directory exists
+    if (-not (Test-Path $DestinationDirectory)) {
+        Write-Verbose "Creating directory $DestinationDirectory"
+        New-Item -Path $DestinationDirectory -ItemType Directory -Force -ErrorAction Stop | Out-Null
     }
     else {
-        Write-Warning 'Unable to write to Destination Directory'
-        break
+        Write-Verbose "Directory exists: $DestinationDirectory"
     }
-    #=================================================
-    #	DestinationName
-    #=================================================
-    if ($PSBoundParameters['DestinationName']) {
+
+    # Test write access
+    $testFile = Join-Path $DestinationDirectory "$(Get-Random).tmp"
+    try {
+        New-Item -Path $testFile -ItemType File -Force -ErrorAction Stop | Out-Null
+        Remove-Item $testFile -Force -ErrorAction Stop
+        Write-Verbose "Write access confirmed for $DestinationDirectory"
+    }
+    catch {
+        Write-Warning "Unable to write to Destination Directory: $_"
+        return $null
+    }
+
+    # Resolve filename if not specified
+    if (-not $PSBoundParameters['DestinationName']) {
+        $uriObj = $SourceUrl -as [System.Uri]
+        $DestinationName = $uriObj.AbsolutePath.Split('/')[-1]
+        Write-Verbose "DestinationName resolved from URL: $DestinationName"
+    }
+
+    $DestinationFullName = Join-Path (Get-Item $DestinationDirectory).FullName $DestinationName
+    Write-Verbose "DestinationFullName: $DestinationFullName"
+
+    if ((-not $Overwrite) -and (Test-Path $DestinationFullName)) {
+        Write-Verbose "File already exists and -Overwrite not specified"
+        return Get-Item $DestinationFullName -Force
+    }
+
+    # Normalize URL (Azure SAS safe)
+    $SourceUrl = [Uri]::EscapeUriString($SourceUrl.Replace('%','~')).Replace('~','%')
+    Write-Verbose "Normalized SourceUrl: $SourceUrl"
+
+    # Decide transport
+    $proxyAddress = $null
+    try { $proxyAddress = ([System.Net.WebRequest]::DefaultWebProxy).Address } catch {}
+    $curlAvailable = $false
+    try { $curlAvailable = Test-CommandCurlExe } catch {}
+
+    Write-Verbose "Transport decision inputs: Proxy=$proxyAddress CurlAvailable=$curlAvailable"
+
+    $UseWebClient = $false
+    if ($WebClient) {
+        Write-Verbose "Forcing WebClient due to switch"
+        $UseWebClient = $true
+    }
+    elseif ($proxyAddress) {
+        Write-Verbose "Using WebClient because proxy is configured"
+        $UseWebClient = $true
+    }
+    elseif (-not $curlAvailable) {
+        Write-Verbose "Using WebClient because curl.exe not available"
+        $UseWebClient = $true
     }
     else {
-        $DestinationNameUri = $SourceUrl -as [System.Uri] # Convert to Uri so we can ignore any query string
-        $DestinationName = $DestinationNameUri.AbsolutePath.Split('/')[-1]
+        Write-Verbose "Using curl.exe"
     }
-    Write-Verbose "DestinationName: $DestinationName"
-    #=================================================
-    #	WebFileFullName
-    #=================================================
-    $DestinationDirectoryItem = (Get-Item $DestinationDirectory -Force).FullName
-    $DestinationFullName = Join-Path $DestinationDirectoryItem $DestinationName
-    #=================================================
-    #	OverWrite
-    #=================================================
-    if ((-not ($PSBoundParameters['Overwrite'])) -and (Test-Path $DestinationFullName)) {
-        Write-Verbose 'DestinationFullName already exists'
-        Get-Item $DestinationFullName -Force
-    }
-    else {
-        #=================================================
-        #	Download with retries
-        #=================================================
-        $SourceUrl = [Uri]::EscapeUriString($SourceUrl.Replace('%', '~')).Replace('~', '%') # Substitute and replace '%' to avoid escaping os Azure SAS tokens
-        Write-Verbose "Testing file at $SourceUrl"
-        #=================================================
-        #	Test for WebClient Proxy
-        #=================================================
-        $UseWebClient = $false
-        if ($WebClient -eq $true) {
-            $UseWebClient = $true
+
+    # HEAD request (only if curl path)
+    $remoteLength = $null
+    $remoteAcceptsRanges = $false
+
+    if (-not $UseWebClient) {
+        Write-Verbose "Sending HTTP HEAD request"
+        try {
+            $remote = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $SourceUrl
+            $remoteLength = [int64]($remote.Headers.'Content-Length' | Select-Object -First 1)
+            $remoteAcceptsRanges = ($remote.Headers.'Accept-Ranges' -eq 'bytes')
+            Write-Verbose "HEAD result: Status=$($remote.StatusCode) Content-Length=$remoteLength Accept-Ranges=$remoteAcceptsRanges"
         }
-        elseif (([System.Net.WebRequest]::DefaultWebProxy).Address) {
-            $UseWebClient = $true
+        catch {
+            Write-Warning "HEAD request failed: $_"
+            return $null
         }
-        elseif (!(Test-CommandCurlExe)) {
-            $UseWebClient = $true
+    }
+
+    $DownloadSuccess = $false
+    $DownloadAttempt = 0
+
+    while ($DownloadAttempt -lt $MaxRetries -and -not $DownloadSuccess) {
+
+        $DownloadAttempt++
+        Write-Verbose "---- Download attempt $DownloadAttempt of $MaxRetries ----"
+
+        if (Test-Path $DestinationFullName) {
+            Write-Verbose "Existing file found before attempt (Size=$((Get-Item $DestinationFullName).Length))"
+            if ($Overwrite) {
+                Write-Verbose "Deleting existing file due to -Overwrite"
+                Remove-Item $DestinationFullName -Force -ErrorAction SilentlyContinue
+            }
         }
 
-        # Get expected size and hash info
-        $remoteLength = $null
-        $remoteAcceptsRanges = $false
-        if ($UseWebClient -eq $false) {
-            Write-Verbose 'Requesing HTTP HEAD to get Content-Length and Accept-Ranges header'
+        if ($UseWebClient) {
             try {
-                $remote = Invoke-WebRequest -UseBasicParsing -Method Head -Uri $SourceUrl
-                $remoteLength = [Int64]($remote.Headers.'Content-Length' | Select-Object -First 1)
-                $remoteAcceptsRanges = ($remote.Headers.'Accept-Ranges' | Select-Object -First 1) -eq 'bytes'
+                Write-Verbose "WebClient download starting"
+                [Net.ServicePointManager]::SecurityProtocol = `
+                    [Net.ServicePointManager]::SecurityProtocol -bor `
+                    [Net.SecurityProtocolType]::Tls1
+
+                $wc = New-Object System.Net.WebClient
+                $wc.DownloadFile($SourceUrl, $DestinationFullName)
+                Write-Verbose "WebClient download completed"
             }
             catch {
-                Write-Warning "$_" # Error Example: Response status code does not indicate success: 404 (Not Found).
-                Return $null
+                Write-Warning "WebClient failed: $_"
             }
-        }
-
-        $DownloadAttempt = 0
-        $DownloadSuccess = $false
-        while ($DownloadAttempt -lt $MaxRetries -and -not $DownloadSuccess) {
-            $DownloadAttempt++
-            Write-Verbose "Download attempt $DownloadAttempt of $MaxRetries"
-
-            if ($UseWebClient -eq $true) {
-                [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls1
-                $WebClient = New-Object System.Net.WebClient
-                $WebClient.DownloadFile($SourceUrl, $DestinationFullName)
-                $WebClient.Dispose()
+            finally {
+                if ($wc) { $wc.Dispose() }
             }
-            else {
-                Write-Verbose "cURL Source: $SourceUrl"
-                Write-Verbose "Destination: $DestinationFullName"
-
-                $curlCommandExpression = "& curl.exe --insecure --location --output `"$DestinationFullName`" --url `"$SourceUrl`""
-    
-                if ($host.name -match 'PowerShell ISE Host') {
-                    #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
-                    $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
-                }
-                else {
-                    Invoke-Expression $curlCommandExpression
-                }
-
-                #=================================================
-                #	Continue interrupted download
-                #=================================================
-                if (Test-Path $DestinationFullName) {
-                    $localExists = $true
-                }
-
-                $RetryDelaySeconds = 1
-                $MaxRetryCount = 10
-                $RetryCount = 0
-                while (
-                    $localExists `
-                        -and ((Get-Item $DestinationFullName).Length -lt $remoteLength) `
-                        -and $remoteAcceptsRanges `
-                        -and ($RetryCount -lt $MaxRetryCount)
-                ) {
-                    Write-Verbose "Download is incomplete, remote server accepts ranges, will retry in $RetryDelaySeconds second(s)"
-                    Start-Sleep -Seconds $RetryDelaySeconds
-                    $RetryDelaySeconds *= 2 # retry with exponential backoff
-                    $RetryCount += 1
-                    $curlCommandExpression = "& curl.exe --insecure --location --continue-at - --output `"$DestinationFullName`" --url `"$SourceUrl`""
-                    
-                    if ($host.name -match 'PowerShell ISE Host') {
-                        #PowerShell ISE will display a NativeCommandError, so progress will not be displayed
-                        $Quiet = Invoke-Expression ($curlCommandExpression + ' 2>&1')
-                    }
-                    else {
-                        Invoke-Expression $curlCommandExpression
-                    }
-                }
-            }
-
-            #=================================================
-            #	Verify download
-            #=================================================
-            if (Test-Path $DestinationFullName) {
-                $localFile = Get-Item $DestinationFullName
-                $sizeMatch = $true
-                if ($remoteLength) {
-                    $sizeMatch = $localFile.Length -eq $remoteLength
-                    if (-not $sizeMatch) {
-                        Write-Warning "Downloaded file size ($($localFile.Length)) does not match expected size ($remoteLength)"
-                    }
-                }
-
-                $hashMatch = $true
-                if ($ExpectedSHA1) {
-                    try {
-                        $actualSHA1 = (Get-FileHash -Path $DestinationFullName -Algorithm SHA1).Hash
-                        $hashMatch = $actualSHA1 -eq $ExpectedSHA1
-                        if (-not $hashMatch) {
-                            Write-Warning "Downloaded file SHA1 ($actualSHA1) does not match expected SHA1 ($ExpectedSHA1)"
-                        }
-                    }
-                    catch {
-                        Write-Warning "Failed to compute SHA1 hash: $_"
-                        $hashMatch = $false
-                    }
-                }
-
-                if ($sizeMatch -and $hashMatch) {
-                    $DownloadSuccess = $true
-                }
-                else {
-                    if ($DownloadAttempt -lt $MaxRetries) {
-                        Write-Verbose "Download verification failed, will retry"
-                        Remove-Item $DestinationFullName -Force -ErrorAction SilentlyContinue
-                        Start-Sleep -Seconds 2
-                    }
-                }
-            }
-            else {
-                Write-Warning "Download failed, file not found"
-            }
-        }
-
-        if (-not $DownloadSuccess) {
-            Write-Warning "Could not download $DestinationFullName after $MaxRetries attempts"
-            $null
-        }
-        #=================================================
-        #	Return
-        #=================================================
-        if (Test-Path $DestinationFullName) {
-            Get-Item $DestinationFullName -Force
         }
         else {
-            Write-Warning "Could not download $DestinationFullName"
-            $null
+            $cmd = "& curl.exe --insecure --location --output `"$DestinationFullName`" --url `"$SourceUrl`""
+            Write-Verbose "Executing: $cmd"
+            Invoke-Expression $cmd
+            Write-Verbose "curl exit code: $LASTEXITCODE"
+
+            $localExists = Test-Path $DestinationFullName
+            Write-Verbose "Local file exists after curl: $localExists"
+
+            if ($localExists -and $remoteLength -and $remoteAcceptsRanges) {
+
+                $RetryDelaySeconds = 1
+                $RetryCount = 0
+                $MaxRetryCount = 10
+
+                while (
+                    (Get-Item $DestinationFullName).Length -lt $remoteLength -and
+                    $RetryCount -lt $MaxRetryCount
+                ) {
+                    Write-Verbose "Incomplete download detected. Retrying in $RetryDelaySeconds sec"
+                    Start-Sleep -Seconds $RetryDelaySeconds
+                    $RetryDelaySeconds *= 2
+                    $RetryCount++
+
+                    $cmd = "& curl.exe --insecure --location --continue-at - --output `"$DestinationFullName`" --url `"$SourceUrl`""
+                    Write-Verbose "Executing resume: $cmd"
+                    Invoke-Expression $cmd
+                    Write-Verbose "curl (resume) exit code: $LASTEXITCODE"
+                }
+            }
         }
-        #=================================================
+
+        # Verification
+        if (Test-Path $DestinationFullName) {
+
+            $localFile = Get-Item $DestinationFullName
+            Write-Verbose "Verifying file (Size=$($localFile.Length))"
+
+            $sizeMatch = $true
+            if ($remoteLength) {
+                $sizeMatch = ($localFile.Length -eq $remoteLength)
+            }
+
+            $hashMatch = $true
+            if ($ExpectedSHA1) {
+                try {
+                    $actualSHA1 = (Get-FileHash $DestinationFullName -Algorithm SHA1).Hash
+                    $hashMatch = ($actualSHA1 -eq $ExpectedSHA1)
+                    Write-Verbose "SHA1 actual=$actualSHA1 expected=$ExpectedSHA1"
+                }
+                catch {
+                    Write-Warning "SHA1 calculation failed: $_"
+                    $hashMatch = $false
+                }
+            }
+
+            Write-Verbose "Verification result: SizeMatch=$sizeMatch HashMatch=$hashMatch"
+
+            if ($sizeMatch -and $hashMatch) {
+                $DownloadSuccess = $true
+                Write-Verbose "Download verification SUCCESS"
+            }
+            else {
+                Write-Verbose "Verification failed"
+                Remove-Item $DestinationFullName -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Seconds 2
+            }
+        }
+        else {
+            Write-Warning "File not found after download attempt"
+        }
     }
+
+    if (-not $DownloadSuccess) {
+        Write-Warning "Download failed after $MaxRetries attempts"
+        return $null
+    }
+
+    $final = Get-Item $DestinationFullName -Force
+    Write-Verbose "========== Save-WebFile SUCCESS: $($final.FullName) Size=$($final.Length) =========="
+    return $final
 }

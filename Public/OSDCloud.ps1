@@ -975,7 +975,7 @@
             Write-SectionHeader "Download Operating System"
             Write-DarkGrayHost "$($Global:OSDCloud.ImageFileUrl)"
             Write-DarkGrayHost "Test message"
-            $savelog = 'C:\OSDCloud\Logs\Save-WebFile.log'
+            $savelog = 'C:\OSDCloud\Logs\Download-OS.log'
             $null = New-Item -Path 'C:\OSDCloud\OS' -ItemType Directory -Force -ErrorAction Ignore
             if (Test-WebConnection -Uri $Global:OSDCloud.ImageFileUrl) {
                 if ($Global:OSDCloud.ImageFileName) {
