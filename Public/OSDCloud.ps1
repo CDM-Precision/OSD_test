@@ -998,7 +998,7 @@
                         }
                     }
                     else {
-                        $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -DestinationName $Global:OSDCloud.ImageFileName -ErrorAction Stop
+                        $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -DestinationName $Global:OSDCloud.ImageFileName -Verbose 4>> C:\OSDCloud\Logs\Save-WebFile.log 3>> C:\OSDCloud\Logs\Save-WebFile.log -ErrorAction Stop
                     }
                 }
                 else {
