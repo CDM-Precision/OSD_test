@@ -975,7 +975,7 @@
             Write-SectionHeader "Download Operating System"
             Write-DarkGrayHost "$($Global:OSDCloud.ImageFileUrl)"
             Write-DarkGrayHost "Test message"
-
+            $savelog = 'C:\OSDCloud\Logs\Save-WebFile.log'
             $null = New-Item -Path 'C:\OSDCloud\OS' -ItemType Directory -Force -ErrorAction Ignore
             if (Test-WebConnection -Uri $Global:OSDCloud.ImageFileUrl) {
                 if ($Global:OSDCloud.ImageFileName) {
@@ -988,8 +988,7 @@
                         $OSDownloadChildPath = "$($OSDCloudUSB.DriveLetter):\OSDCloud\OS\$($Global:OSDCloud.OSVersion) $($Global:OSDCloud.OSReleaseID)"
                         Write-Host -ForegroundColor Yellow "[$(Get-Date -format G)] Downloading OSDCloud Offline OS $OSDownloadChildPath"
 
-                        $OSDCloudUsbOS = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory "$OSDownloadChildPath" -DestinationName $Global:OSDCloud.ImageFileName -Verbose 4>> C:\OSDCloud\Logs\Save-WebFile.log 3>> C:\OSDCloud\Logs\Save-WebFile.log -ErrorAction Stop
-
+                        $OSDCloudUsbOS = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory $OSDownloadChildPath -DestinationName $Global:OSDCloud.ImageFileName -Verbose 4>>$savelog -ErrorAction Stop
                         if ($OSDCloudUsbOS) {
                             Write-SectionHeader "Copying Offline OS to C:\OSDCloud\OS\$($OSDCloudUsbOS.Name)"
                             $null = Copy-Item -Path $OSDCloudUsbOS.FullName -Destination "C:\OSDCloud\OS" -Force
@@ -998,11 +997,11 @@
                         }
                     }
                     else {
-                        $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -DestinationName $Global:OSDCloud.ImageFileName -Verbose 4>> C:\OSDCloud\Logs\Save-WebFile.log 3>> C:\OSDCloud\Logs\Save-WebFile.log -ErrorAction Stop
+                        $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -DestinationName $Global:OSDCloud.ImageFileName -Verbose 4>>$savelog -ErrorAction Stop
                     }
                 }
                 else {
-                    $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -ErrorAction Stop
+                    $Global:OSDCloud.ImageFileDestination = Save-WebFile -SourceUrl $Global:OSDCloud.ImageFileUrl -DestinationDirectory 'C:\OSDCloud\OS' -Verbose 4>>$savelog-ErrorAction Stop
                 }
                 if (!(Test-Path $Global:OSDCloud.ImageFileDestination.FullName)) {
                     $Global:OSDCloud.ImageFileDestination = Get-ChildItem -Path 'C:\OSDCloud\OS\*' -Include *.wim,*.esd,*.iso | Select-Object -First 1
