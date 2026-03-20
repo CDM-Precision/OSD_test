@@ -214,7 +214,7 @@ function Save-WebFile {
                 }
                 catch {
                     $transportSuccess = $false
-                    Write-Warning "WebClient failed on attempt $DownloadAttempt: $_"
+                    Write-Warning "WebClient failed on attempt $DownloadAttempt : $_"
                 }
                 finally {
                     if ($wc) {
@@ -275,13 +275,13 @@ function Save-WebFile {
                 }
                 catch {
                     $transportSuccess = $false
-                    Write-Warning "curl invocation failed on attempt $DownloadAttempt: $_"
+                    Write-Warning "curl invocation failed on attempt $DownloadAttempt : $_"
                 }
             }
 
             # Verification block
             if (-not (Test-Path -Path $PartialFullName)) {
-                Write-Warning "Partial file not found after attempt $DownloadAttempt: $PartialFullName"
+                Write-Warning "Partial file not found after attempt $DownloadAttempt : $PartialFullName"
 
                 if ($DownloadAttempt -lt $MaxRetries) {
                     Write-Verbose "Waiting 2 seconds before next attempt"
